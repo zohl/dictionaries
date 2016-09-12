@@ -30,6 +30,7 @@ library
                , containers
                , data-default
                , directory
+               , exceptions
                , filepath
                , text
                , zlib
