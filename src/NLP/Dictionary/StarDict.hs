@@ -7,6 +7,19 @@ module NLP.Dictionary.StarDict (
     StarDict (..)
   , StarDictException (..)
   , mkDictionary
+
+  , checkFiles
+  , checkGZFiles
+
+  , IfoFile(..)
+  , IfoFilePath
+  , readIfoFile
+
+  , Index
+  , IndexEntry
+  , readIndexFile
+
+  , checkDataFile
   ) where
 
 import Prelude hiding (takeWhile)
@@ -78,14 +91,6 @@ readIfoFile ifoPath = (liftIO . BS.readFile $ ifoPath) >>= parseContents where
 type Index = Map ByteString (Integer, Int)
 type IndexEntry = (ByteString, (Integer, Int))
 
-data StarDict = StarDict {
-    sdIfoFile  :: IfoFile
-  , sdIndex    :: Index
-  , sdDataPath :: FilePath
-  } deriving (Eq, Show)
-
-
-
 checkFiles :: IfoFilePath -> [FilePath] -> IO (Maybe FilePath)
 checkFiles _ [] = return Nothing
 checkFiles ifoPath (ext:exts) = let fn = ifoPath -<.> ext
@@ -142,7 +147,14 @@ checkDataFile ifoPath = (liftIO $ checkGZFiles ifoPath ["dict1"] ["dict.dz"]) >>
     GZip.decompress <$> (BS.readFile fn) >>= BS.writeFile fn'
     return fn'
 
-mkDictionary :: (MonadThrow m, MonadIO m) => FilePath -> m StarDict
+
+data StarDict = StarDict {
+    sdIfoFile  :: IfoFile
+  , sdIndex    :: Index
+  , sdDataPath :: FilePath
+  } deriving (Eq, Show)
+
+mkDictionary :: (MonadThrow m, MonadIO m) => IfoFilePath -> m StarDict
 mkDictionary ifoPath = do
   sdIfoFile  <- readIfoFile   ifoPath
   sdIndex    <- readIndexFile getWord32be ifoPath

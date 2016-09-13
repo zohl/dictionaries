@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 import NLP.Dictionary (Dictionary(..))
-import qualified NLP.Dictionary.StarDict as StarDict
+import qualified NLP.Dictionary.StarDict.InMemory as StarDict
 
 main :: IO ()
 main = do

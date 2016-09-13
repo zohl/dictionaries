@@ -21,6 +21,7 @@ library
   exposed-modules:
     NLP.Dictionary
     NLP.Dictionary.StarDict
+    NLP.Dictionary.StarDict.InMemory
   -- other-modules:
   -- other-extensions:
   build-depends: base >=4.8 && <5.0
