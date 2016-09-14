@@ -14,6 +14,7 @@ module NLP.Dictionary.StarDict (
   , IfoFile(..)
   , IfoFilePath
   , readIfoFile
+  , indexNumberParser
 
   , Index
   , IndexEntry
@@ -24,17 +25,20 @@ module NLP.Dictionary.StarDict (
 
 import Prelude hiding (takeWhile)
 import Control.Applicative (liftA2, many)
-import Control.Monad (when)
+import Control.Monad (when, unless)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Catch (Exception, MonadThrow, throwM)
 import Data.Attoparsec.ByteString.Lazy
 import Data.Attoparsec.ByteString.Char8 (isEndOfLine, endOfLine, skipSpace, char)
-import Data.Binary.Get (Get, runGetOrFail, isEmpty, getLazyByteStringNul, getWord32be)
+import Data.Binary.Get (Get, runGetOrFail, isEmpty)
+import Data.Binary.Get (getLazyByteStringNul, getWord32be, getWord64be)
 import Data.Char (chr)
+import Data.List (intercalate)
 import Data.Map.Strict (Map)
 import Data.Maybe (maybeToList)
 import Data.Typeable (Typeable)
-import Data.Word
+import Data.Time (parseTimeM, defaultTimeLocale)
+import Data.Time.Clock (UTCTime)
 import System.Directory (doesFileExist, getTemporaryDirectory)
 import System.FilePath.Posix (dropExtension, joinPath, takeBaseName, (-<.>), (<.>))
 import System.IO (Handle, IOMode(..), SeekMode(..), withFile, hSeek)
@@ -42,10 +46,11 @@ import Data.ByteString.Lazy (ByteString)
 import NLP.Dictionary (Dictionary(..))
 import qualified Codec.Compression.GZip as GZip
 import qualified Data.ByteString.Lazy as BS
+import qualified Data.ByteString.Lazy.Char8 as BSC8
 import qualified Data.Map.Strict as Map
 
 data StarDictException
-  = WrongIfoFormat FilePath
+  = WrongIfoFormat FilePath String
   | IndexNotFound FilePath
   | WrongIndexFormat FilePath String
   | DictionaryNotFound FilePath
@@ -55,23 +60,77 @@ instance Exception StarDictException
 
 
 data IfoFile = IfoFile {
-    ifoMagicData :: ByteString
-  , ifoVersion   :: ByteString
-  , ifoData      :: Map ByteString ByteString
+    ifoMagicData        :: ByteString
+  , ifoVersion          :: ByteString
+  , ifoBookName         :: ByteString
+  , ifoWordCount        :: Int
+  , ifoIdxFileSize      :: Int
+  , ifoIdxOffsetBits    :: Maybe Int
+  , ifoSynWordCount     :: Maybe Int
+  , ifoAuthor           :: Maybe ByteString
+  , ifoEmail            :: Maybe ByteString
+  , ifoWebsite          :: Maybe ByteString
+  , ifoDescription      :: Maybe ByteString
+  , ifoDate             :: Maybe UTCTime
+  , ifoSametypeSequence :: Maybe String
+  , ifoDictType         :: Maybe String
   } deriving (Eq, Show)
 
 readIfoFile :: (MonadThrow m, MonadIO m) => FilePath -> m IfoFile
 readIfoFile ifoPath = (liftIO . BS.readFile $ ifoPath) >>= parseContents where
   parseContents contents = case (parse ifoFile contents) of
-    (Fail _ _ _) -> throwM $ WrongIfoFormat ifoPath
-    (Done _ r)   -> return r
+    (Fail _ _ msg) -> throwM $ WrongIfoFormat ifoPath msg
+    (Done _ r)     -> return r
+
+  expect :: (Eq a, Show a) => String -> a -> [a] -> Parser ()
+  expect name x xs = unless (x `elem` xs) . fail . concat $ [
+      name, " must be ", fmts xs, " (", show x, " provided)"
+    ] where
+      fmt y = '\'':(show y) ++ "'"
+
+      fmts = \case
+        []     -> ""
+        (y:[]) -> fmt y
+        ys     -> (intercalate ", " . map fmt . init $ ys) ++ " or " ++ (fmt . last $ ys)
+
+  justExpect :: (Eq a, Show a) => String -> Maybe a -> [a] -> Parser ()
+  justExpect name mx xs = maybe (return ()) (\x -> expect name x xs) mx
 
   ifoFile :: Parser IfoFile
   ifoFile = do
-    ifoMagicData    <- magicData
+    ifoMagicData <- magicData
+    expect "magic data" ifoMagicData ["StarDict's dict ifo file"]
+
     (_, ifoVersion) <- endOfLine *> pair (Just "version")
-    ifoData         <- Map.fromList <$> (endOfLine *> (many (pair Nothing) <* endOfLine))
+    expect "version" ifoVersion ["2.4.2", "3.0.0"]
+
+    ifoData <- Map.fromList <$> (endOfLine *> (many (pair Nothing) <* endOfLine))
+    let get = flip Map.lookup ifoData
+    let require field = ( $ (get field)) $ maybe
+          (fail $ "required field " ++ BSC8.unpack field ++ " not found") (return)
+
+    ifoBookName    <- require "bookname"
+    ifoWordCount   <- read . BSC8.unpack <$> require "wordcount"
+    ifoIdxFileSize <- read . BSC8.unpack <$> require "idxfilesize"
+
+    let ifoIdxOffsetBits = read . BSC8.unpack <$> get "idxoffsetbits"
+    justExpect "idxoffsetbits" ifoIdxOffsetBits [32, 64]
+
+    let ifoSynWordCount     = read . BSC8.unpack <$> get "synwordcount"
+    let ifoAuthor           = get "author"
+    let ifoEmail            = get "email"
+    let ifoWebsite          = get "website"
+    let ifoDescription      = get "description"
+
+    let ifoDate = get "date" >>= parseTimeM False defaultTimeLocale "%0Y.%m.%d" . BSC8.unpack
+
+    let ifoSametypeSequence = BSC8.unpack <$> get "sametypesequence"
+
+    let ifoDictType = BSC8.unpack <$> get "dicttype"
+    justExpect "dicttype" ifoDictType ["wordnet"]
+
     return IfoFile {..}
+
 
   magicData :: Parser ByteString
   magicData = BS.fromStrict <$> takeWhile (not . isEndOfLine)
@@ -87,9 +146,13 @@ readIfoFile ifoPath = (liftIO . BS.readFile $ ifoPath) >>= parseContents where
       v <- BS.fromStrict <$> (skipSpace *> takeWhile (not . isEndOfLine))
       return (k, v)
 
+indexNumberParser :: IfoFile -> Get Int
+indexNumberParser IfoFile {..} = case ifoIdxOffsetBits of
+  (Just 64) -> fromIntegral <$> getWord64be
+  _         -> fromIntegral <$> getWord32be
 
-type Index = Map ByteString (Integer, Int)
-type IndexEntry = (ByteString, (Integer, Int))
+type Index = Map ByteString (Int, Int)
+type IndexEntry = (ByteString, (Int, Int))
 
 checkFiles :: IfoFilePath -> [FilePath] -> IO (Maybe FilePath)
 checkFiles _ [] = return Nothing
@@ -110,17 +173,19 @@ checkGZFiles ifoPath exts exts' = (checkFiles ifoPath exts) >>= maybe
 
 type IfoFilePath = FilePath
 
-readIndexFile :: (Integral a, MonadThrow m, MonadIO m) => Get a -> IfoFilePath -> m Index
-readIndexFile num fn = checkIndexFile fn >>= getIndexContents >>= mkIndex where
+readIndexFile :: (MonadThrow m, MonadIO m) => IfoFilePath -> Get Int -> m Index
+readIndexFile fn num = checkIndexFile fn >>= getIndexContents >>= mkIndex where
 
-  checkIndexFile :: (MonadThrow m, MonadIO m) => IfoFilePath -> m FilePath
+  checkIndexFile :: (MonadThrow m, MonadIO m) => IfoFilePath -> m (Either FilePath FilePath)
   checkIndexFile ifoPath = (liftIO $ checkGZFiles ifoPath ["idx"] ["idx.gz"]) >>= \case
-    Nothing         -> throwM $ IndexNotFound ifoPath
-    Just (Left fn)  -> return fn
-    Just (Right fn) -> error "TODO"
+    Nothing   -> throwM $ IndexNotFound ifoPath
+    Just path -> return path
 
-  getIndexContents :: (MonadThrow m, MonadIO m) => FilePath -> m (FilePath, ByteString)
-  getIndexContents fn = liftIO . fmap (fn,) . BS.readFile $ fn
+  getIndexContents :: (MonadThrow m, MonadIO m)
+    => Either FilePath FilePath -> m (FilePath, ByteString)
+  getIndexContents path = liftIO . fmap (fn,) . postprocess . BS.readFile $ fn where
+    postprocess = either (const id) (const $ fmap GZip.decompress) path
+    fn = either id id path
 
   mkIndex :: (MonadThrow m, MonadIO m) => (FilePath, ByteString) -> m Index
   mkIndex (fn, contents) = either
@@ -135,8 +200,7 @@ readIndexFile num fn = checkIndexFile fn >>= getIndexContents >>= mkIndex where
 
   getIndexEntry :: Get IndexEntry
   getIndexEntry = (,) <$> getLazyByteStringNul
-                      <*> ((,) <$> (fromIntegral <$> num)
-                               <*> (fromIntegral <$> num))
+                      <*> ((,) <$> num <*> num)
 
 checkDataFile :: (MonadThrow m, MonadIO m) => IfoFilePath -> m FilePath
 checkDataFile ifoPath = (liftIO $ checkGZFiles ifoPath ["dict1"] ["dict.dz"]) >>= \case
@@ -157,7 +221,7 @@ data StarDict = StarDict {
 mkDictionary :: (MonadThrow m, MonadIO m) => IfoFilePath -> m StarDict
 mkDictionary ifoPath = do
   sdIfoFile  <- readIfoFile   ifoPath
-  sdIndex    <- readIndexFile getWord32be ifoPath
+  sdIndex    <- readIndexFile ifoPath (indexNumberParser sdIfoFile)
   sdDataPath <- checkDataFile ifoPath
   return StarDict {..}
 
@@ -167,6 +231,7 @@ instance Dictionary StarDict where
     extractEntries :: Handle -> IO [ByteString]
     extractEntries h = mapM (extractEntry h) . maybeToList . Map.lookup str $ sdIndex
 
-    extractEntry :: Handle -> (Integer, Int) -> IO ByteString
-    extractEntry h (offset, size) = hSeek h AbsoluteSeek offset >> BS.hGet h size
+    extractEntry :: Handle -> (Int, Int) -> IO ByteString
+    extractEntry h (offset, size) = hSeek h AbsoluteSeek offset' >> BS.hGet h size where
+      offset' = fromIntegral offset
 

@@ -34,6 +34,7 @@ library
                , exceptions
                , filepath
                , text
+               , time
                , zlib
   hs-source-dirs:      src
   default-language:    Haskell2010
