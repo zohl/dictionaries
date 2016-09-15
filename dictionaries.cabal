@@ -44,7 +44,9 @@ executable test
   hs-source-dirs:     test
   main-is:            Main.hs
   build-depends: base >= 4.7 && < 5.0
+               , bytestring
                , dictionaries
+               , text
 
   default-language:    Haskell2010
 

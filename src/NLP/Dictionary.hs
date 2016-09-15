@@ -2,7 +2,7 @@ module NLP.Dictionary (
     Dictionary(..)
   ) where
 
-import Data.ByteString.Lazy (ByteString)
+import Data.Text.Lazy (Text)
 
 class Dictionary a where
-  getEntries :: ByteString -> a -> IO [ByteString]
+  getEntries :: Text -> a -> IO [Text]

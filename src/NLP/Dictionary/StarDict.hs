@@ -8,6 +8,10 @@ module NLP.Dictionary.StarDict (
   , StarDictException (..)
   , mkDictionary
 
+  , mkDataParser
+  , DataEntry (..)
+  , Renderer
+
   , checkFiles
   , checkGZFiles
 
@@ -28,10 +32,12 @@ import Control.Applicative (liftA2, many)
 import Control.Monad (when, unless)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Catch (Exception, MonadThrow, throwM)
-import Data.Attoparsec.ByteString.Lazy
+import Data.Attoparsec.ByteString.Lazy (Result(..), Parser, parse, string, takeWhile, inClass)
 import Data.Attoparsec.ByteString.Char8 (isEndOfLine, endOfLine, skipSpace, char)
-import Data.Binary.Get (Get, runGetOrFail, isEmpty)
-import Data.Binary.Get (getLazyByteStringNul, getWord32be, getWord64be)
+import Data.Binary.Get (Get, runGet, runGetOrFail, isEmpty)
+import Data.Binary.Get (getRemainingLazyByteString, getLazyByteStringNul, getLazyByteString)
+import Data.Binary.Get (getWord32be, getWord64be)
+import Data.ByteString.Lazy (ByteString)
 import Data.Char (chr)
 import Data.List (intercalate)
 import Data.Map.Strict (Map)
@@ -39,15 +45,17 @@ import Data.Maybe (maybeToList)
 import Data.Typeable (Typeable)
 import Data.Time (parseTimeM, defaultTimeLocale)
 import Data.Time.Clock (UTCTime)
+import Data.Text.Lazy (Text)
+import Data.Text.Lazy.Encoding (decodeUtf8)
 import System.Directory (doesFileExist, getTemporaryDirectory)
 import System.FilePath.Posix (dropExtension, joinPath, takeBaseName, (-<.>), (<.>))
 import System.IO (Handle, IOMode(..), SeekMode(..), withFile, hSeek)
-import Data.ByteString.Lazy (ByteString)
 import NLP.Dictionary (Dictionary(..))
 import qualified Codec.Compression.GZip as GZip
 import qualified Data.ByteString.Lazy as BS
 import qualified Data.ByteString.Lazy.Char8 as BSC8
 import qualified Data.Map.Strict as Map
+import qualified Data.Text.Lazy as T
 
 data StarDictException
   = WrongIfoFormat FilePath String
@@ -72,7 +80,7 @@ data IfoFile = IfoFile {
   , ifoWebsite          :: Maybe ByteString
   , ifoDescription      :: Maybe ByteString
   , ifoDate             :: Maybe UTCTime
-  , ifoSametypeSequence :: Maybe String
+  , ifoSameTypeSequence :: Maybe String
   , ifoDictType         :: Maybe String
   } deriving (Eq, Show)
 
@@ -124,7 +132,7 @@ readIfoFile ifoPath = (liftIO . BS.readFile $ ifoPath) >>= parseContents where
 
     let ifoDate = get "date" >>= parseTimeM False defaultTimeLocale "%0Y.%m.%d" . BSC8.unpack
 
-    let ifoSametypeSequence = BSC8.unpack <$> get "sametypesequence"
+    let ifoSameTypeSequence = BSC8.unpack <$> get "sametypesequence"
 
     let ifoDictType = BSC8.unpack <$> get "dicttype"
     justExpect "dicttype" ifoDictType ["wordnet"]
@@ -151,8 +159,8 @@ indexNumberParser IfoFile {..} = case ifoIdxOffsetBits of
   (Just 64) -> fromIntegral <$> getWord64be
   _         -> fromIntegral <$> getWord32be
 
-type Index = Map ByteString (Int, Int)
-type IndexEntry = (ByteString, (Int, Int))
+type Index = Map Text (Int, Int)
+type IndexEntry = (Text, (Int, Int))
 
 checkFiles :: IfoFilePath -> [FilePath] -> IO (Maybe FilePath)
 checkFiles _ [] = return Nothing
@@ -199,7 +207,7 @@ readIndexFile fn num = checkIndexFile fn >>= getIndexContents >>= mkIndex where
     False -> liftA2 (:) getIndexEntry getIndexEntries
 
   getIndexEntry :: Get IndexEntry
-  getIndexEntry = (,) <$> getLazyByteStringNul
+  getIndexEntry = (,) <$> (decodeUtf8 <$> getLazyByteStringNul)
                       <*> ((,) <$> num <*> num)
 
 checkDataFile :: (MonadThrow m, MonadIO m) => IfoFilePath -> m FilePath
@@ -212,26 +220,71 @@ checkDataFile ifoPath = (liftIO $ checkGZFiles ifoPath ["dict1"] ["dict.dz"]) >>
     return fn'
 
 
-data StarDict = StarDict {
-    sdIfoFile  :: IfoFile
-  , sdIndex    :: Index
-  , sdDataPath :: FilePath
-  } deriving (Eq, Show)
+data DataEntry
+  = UTF8Text ByteString -- m
+  | LocaleText ByteString -- l
+  | Pango ByteString -- g
+  | Phonetics ByteString -- t
+  | XDXF ByteString -- x
+  | CJK ByteString -- y
+  | PowerWord ByteString -- k
+  | MediaWiki ByteString -- w
+  | HTML ByteString -- h
+  | Resource [ByteString] -- n, r
+  | WAVEAudio ByteString -- W
+  | Picture ByteString -- P
+  | Reserved ByteString -- X
+  deriving (Eq, Show)
 
-mkDictionary :: (MonadThrow m, MonadIO m) => IfoFilePath -> m StarDict
-mkDictionary ifoPath = do
-  sdIfoFile  <- readIfoFile   ifoPath
-  sdIndex    <- readIndexFile ifoPath (indexNumberParser sdIfoFile)
-  sdDataPath <- checkDataFile ifoPath
+getMany :: Get a -> Get [a]
+getMany p = isEmpty >>= \case
+  True  -> return []
+  False -> liftA2 (:) p (getMany p)
+
+mkDataParser :: Maybe String -> Get [DataEntry]
+mkDataParser = maybe (getMany getGenericEntry) getSpecificEntries where
+
+  getGenericEntry :: Get DataEntry
+  getGenericEntry = BSC8.head <$> getLazyByteString 1
+                >>= getSpecificEntry getLazyByteStringNul
+
+  getSpecificEntries :: [Char] -> Get [DataEntry]
+  getSpecificEntries cs = sequence $ zipWith getSpecificEntry ps cs where
+    ps :: [Get ByteString]
+    ps = reverse . take (length cs) $ getRemainingLazyByteString:(repeat getLazyByteStringNul)
+
+  getSpecificEntry :: Get ByteString -> Char -> Get DataEntry
+  getSpecificEntry getData = \case
+    'm' -> UTF8Text <$> getData
+    'x' -> XDXF <$> getData
+    _   -> error "TODO"
+
+type Renderer = DataEntry -> Text
+
+data StarDict = StarDict {
+    sdIfoFile    :: IfoFile
+  , sdIndex      :: Index
+  , sdDataPath   :: FilePath
+  , sdDataParser :: Get [DataEntry]
+  , sdRender     :: Renderer
+  }
+
+mkDictionary :: (MonadThrow m, MonadIO m) => IfoFilePath -> Renderer -> m StarDict
+mkDictionary ifoPath sdRender = do
+  sdIfoFile    <- readIfoFile   ifoPath
+  sdIndex      <- readIndexFile ifoPath (indexNumberParser sdIfoFile)
+  sdDataPath   <- checkDataFile ifoPath
+  let sdDataParser = mkDataParser (ifoSameTypeSequence sdIfoFile)
   return StarDict {..}
 
 instance Dictionary StarDict where
   getEntries str (StarDict {..}) = withFile sdDataPath ReadMode extractEntries where
 
-    extractEntries :: Handle -> IO [ByteString]
+    extractEntries :: Handle -> IO [Text]
     extractEntries h = mapM (extractEntry h) . maybeToList . Map.lookup str $ sdIndex
 
-    extractEntry :: Handle -> (Int, Int) -> IO ByteString
-    extractEntry h (offset, size) = hSeek h AbsoluteSeek offset' >> BS.hGet h size where
-      offset' = fromIntegral offset
+    extractEntry :: Handle -> (Int, Int) -> IO Text
+    extractEntry h (offset, size) = do
+      hSeek h AbsoluteSeek (fromIntegral offset)
+      T.concat . map sdRender . runGet sdDataParser <$> BS.hGet h size
 
