@@ -19,6 +19,7 @@ module NLP.Dictionary.StarDict (
   , IfoFilePath
   , readIfoFile
   , indexNumberParser
+  , ifoDateFormat
 
   , Index
   , IndexEntry
@@ -29,6 +30,7 @@ module NLP.Dictionary.StarDict (
 
 import Prelude hiding (takeWhile)
 import Control.Applicative (liftA2, many)
+import Control.Arrow ((***))
 import Control.Monad (when, unless)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Catch (Exception, MonadThrow, throwM)
@@ -46,7 +48,7 @@ import Data.Typeable (Typeable)
 import Data.Time (parseTimeM, defaultTimeLocale)
 import Data.Time.Clock (UTCTime)
 import Data.Text.Lazy (Text)
-import Data.Text.Lazy.Encoding (decodeUtf8)
+import Data.Text.Lazy.Encoding (decodeUtf8, decodeLatin1)
 import System.Directory (doesFileExist, getTemporaryDirectory)
 import System.FilePath.Posix (dropExtension, joinPath, takeBaseName, (-<.>), (<.>))
 import System.IO (Handle, IOMode(..), SeekMode(..), withFile, hSeek)
@@ -69,20 +71,23 @@ instance Exception StarDictException
 
 data IfoFile = IfoFile {
     ifoMagicData        :: ByteString
-  , ifoVersion          :: ByteString
-  , ifoBookName         :: ByteString
+  , ifoVersion          :: String
+  , ifoBookName         :: Text
   , ifoWordCount        :: Int
   , ifoIdxFileSize      :: Int
   , ifoIdxOffsetBits    :: Maybe Int
   , ifoSynWordCount     :: Maybe Int
-  , ifoAuthor           :: Maybe ByteString
-  , ifoEmail            :: Maybe ByteString
-  , ifoWebsite          :: Maybe ByteString
-  , ifoDescription      :: Maybe ByteString
+  , ifoAuthor           :: Maybe Text
+  , ifoEmail            :: Maybe Text
+  , ifoWebsite          :: Maybe Text
+  , ifoDescription      :: Maybe Text
   , ifoDate             :: Maybe UTCTime
   , ifoSameTypeSequence :: Maybe String
   , ifoDictType         :: Maybe String
   } deriving (Eq, Show)
+
+ifoDateFormat :: String
+ifoDateFormat = "%0Y.%m.%d"
 
 readIfoFile :: (MonadThrow m, MonadIO m) => FilePath -> m IfoFile
 readIfoFile ifoPath = (liftIO . BS.readFile $ ifoPath) >>= parseContents where
@@ -109,7 +114,7 @@ readIfoFile ifoPath = (liftIO . BS.readFile $ ifoPath) >>= parseContents where
     ifoMagicData <- magicData
     expect "magic data" ifoMagicData ["StarDict's dict ifo file"]
 
-    (_, ifoVersion) <- endOfLine *> pair (Just "version")
+    (_, ifoVersion) <- (id *** BSC8.unpack) <$> (endOfLine *> pair (Just "version"))
     expect "version" ifoVersion ["2.4.2", "3.0.0"]
 
     ifoData <- Map.fromList <$> (endOfLine *> (many (pair Nothing) <* endOfLine))
@@ -117,7 +122,7 @@ readIfoFile ifoPath = (liftIO . BS.readFile $ ifoPath) >>= parseContents where
     let require field = ( $ (get field)) $ maybe
           (fail $ "required field " ++ BSC8.unpack field ++ " not found") (return)
 
-    ifoBookName    <- require "bookname"
+    ifoBookName    <- decodeUtf8 <$> require "bookname"
     ifoWordCount   <- read . BSC8.unpack <$> require "wordcount"
     ifoIdxFileSize <- read . BSC8.unpack <$> require "idxfilesize"
 
@@ -125,12 +130,12 @@ readIfoFile ifoPath = (liftIO . BS.readFile $ ifoPath) >>= parseContents where
     justExpect "idxoffsetbits" ifoIdxOffsetBits [32, 64]
 
     let ifoSynWordCount     = read . BSC8.unpack <$> get "synwordcount"
-    let ifoAuthor           = get "author"
-    let ifoEmail            = get "email"
-    let ifoWebsite          = get "website"
-    let ifoDescription      = get "description"
+    let ifoAuthor           = decodeUtf8 <$> get "author"
+    let ifoEmail            = decodeUtf8 <$> get "email"
+    let ifoWebsite          = decodeUtf8 <$> get "website"
+    let ifoDescription      = decodeUtf8 <$> get "description"
 
-    let ifoDate = get "date" >>= parseTimeM False defaultTimeLocale "%0Y.%m.%d" . BSC8.unpack
+    let ifoDate = get "date" >>= parseTimeM False defaultTimeLocale ifoDateFormat . BSC8.unpack
 
     let ifoSameTypeSequence = BSC8.unpack <$> get "sametypesequence"
 
@@ -221,19 +226,19 @@ checkDataFile ifoPath = (liftIO $ checkGZFiles ifoPath ["dict1"] ["dict.dz"]) >>
 
 
 data DataEntry
-  = UTF8Text ByteString -- m
-  | LocaleText ByteString -- l
-  | Pango ByteString -- g
-  | Phonetics ByteString -- t
-  | XDXF ByteString -- x
-  | CJK ByteString -- y
-  | PowerWord ByteString -- k
-  | MediaWiki ByteString -- w
-  | HTML ByteString -- h
-  | Resource [ByteString] -- n, r
-  | WAVEAudio ByteString -- W
-  | Picture ByteString -- P
-  | Reserved ByteString -- X
+  = UTF8Text Text
+  | LocaleText Text
+  | Pango Text
+  | Phonetics Text
+  | XDXF Text
+  | CJK Text
+  | PowerWord Text
+  | MediaWiki Text
+  | HTML Text
+  | Resource [FilePath]
+  | WAVEAudio ByteString
+  | Picture ByteString
+  | Reserved ByteString
   deriving (Eq, Show)
 
 getMany :: Get a -> Get [a]
@@ -255,9 +260,21 @@ mkDataParser = maybe (getMany getGenericEntry) getSpecificEntries where
 
   getSpecificEntry :: Get ByteString -> Char -> Get DataEntry
   getSpecificEntry getData = \case
-    'm' -> UTF8Text <$> getData
-    'x' -> XDXF <$> getData
-    _   -> error "TODO"
+    'm' -> UTF8Text   . decodeUtf8 <$> getData
+    'l' -> LocaleText . decodeLatin1 <$> getData
+    'g' -> Pango      . decodeUtf8 <$> getData
+    't' -> Phonetics  . decodeUtf8 <$> getData
+    'x' -> XDXF       . decodeUtf8 <$> getData
+    'y' -> CJK        . decodeUtf8 <$> getData
+    'k' -> PowerWord  . decodeUtf8 <$> getData
+    'w' -> MediaWiki  . decodeUtf8 <$> getData
+    'h' -> HTML       . decodeUtf8 <$> getData
+    'n' -> Resource   . lines . T.unpack . decodeUtf8 <$> getData
+    'r' -> Resource   . lines . T.unpack . decodeUtf8 <$> getData
+    'W' -> WAVEAudio <$> getData
+    'P' -> Picture   <$> getData
+    'X' -> Reserved  <$> getData
+    _   -> error "type not supported"
 
 type Renderer = DataEntry -> Text
 
@@ -287,4 +304,3 @@ instance Dictionary StarDict where
     extractEntry h (offset, size) = do
       hSeek h AbsoluteSeek (fromIntegral offset)
       T.concat . map sdRender . runGet sdDataParser <$> BS.hGet h size
-

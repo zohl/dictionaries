@@ -1,14 +1,26 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 import NLP.Dictionary (Dictionary(..))
-import qualified NLP.Dictionary.StarDict as StarDict
+import NLP.Dictionary.StarDict (DataEntry(..), Renderer)
 import qualified Data.Text.Lazy as T
-import Data.Text.Lazy.Encoding (decodeUtf8)
+import qualified NLP.Dictionary.StarDict as StarDict
+
+
+render :: Renderer
+render (UTF8Text s) = s
+render (XDXF s) = s
+render _ = error "not supported"
 
 main :: IO ()
 main = do
-  -- dict <- StarDict.mkDictionary "../../references/wordnet-stardict/dictd_www.dict.org_wn.ifo"
-  dict <- StarDict.mkDictionary
-    "../../references/lingvo-universal-stardict/LingvoUniversal.ifo"
+  let word = "monad"
 
-  putStrLn . unlines . map (T.unpack . decodeUtf8) =<< (getEntries "monad" dict)
+  dict1 <- StarDict.mkDictionary
+    "../../references/wordnet-stardict/dictd_www.dict.org_wn.ifo"
+    render
+  putStrLn . unlines . map T.unpack =<< (getEntries word dict1)
+
+  dict2 <- StarDict.mkDictionary
+    "../../references/lingvo-universal-stardict/LingvoUniversal.ifo"
+    render
+  putStrLn . unlines . map T.unpack =<< (getEntries word dict2)
