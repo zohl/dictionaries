@@ -59,16 +59,25 @@ import qualified Data.ByteString.Lazy.Char8 as BSC8
 import qualified Data.Map.Strict as Map
 import qualified Data.Text.Lazy as T
 
+-- | Exceptions that are thrown when something with this module went wrong.
 data StarDictException
   = WrongIfoFormat FilePath String
+  -- ^ Thrown when information file (.ifo) has unsupported format.
+
   | IndexNotFound FilePath
+  -- ^ Thrown when index file (.idx, .idx.gz) is not found.
+
   | WrongIndexFormat FilePath String
+  -- ^ Thrown when index file has unsupported format.
+
   | DictionaryNotFound FilePath
+  -- ^ Thrown when dictionary file (.dict, .dict.dz) has unsupported format.
   deriving (Eq, Show, Typeable)
 
 instance Exception StarDictException
 
 
+-- | Representation of .ifo file
 data IfoFile = IfoFile {
     ifoMagicData        :: ByteString
   , ifoVersion          :: String
@@ -86,9 +95,11 @@ data IfoFile = IfoFile {
   , ifoDictType         :: Maybe String
   } deriving (Eq, Show)
 
+-- | Date format of 'ifoDate' in IfoFile.
 ifoDateFormat :: String
 ifoDateFormat = "%0Y.%m.%d"
 
+-- | Read .ifo file at the given path.
 readIfoFile :: (MonadThrow m, MonadIO m) => FilePath -> m IfoFile
 readIfoFile ifoPath = (liftIO . BS.readFile $ ifoPath) >>= parseContents where
   parseContents contents = case (parse ifoFile contents) of
@@ -159,14 +170,19 @@ readIfoFile ifoPath = (liftIO . BS.readFile $ ifoPath) >>= parseContents where
       v <- BS.fromStrict <$> (skipSpace *> takeWhile (not . isEndOfLine))
       return (k, v)
 
+-- | Get 32-bit or 64-bit integer depending on description in the .ifo file.
 indexNumberParser :: IfoFile -> Get Int
 indexNumberParser IfoFile {..} = case ifoIdxOffsetBits of
   (Just 64) -> fromIntegral <$> getWord64be
   _         -> fromIntegral <$> getWord32be
 
+-- | Representation of an .idx file.
 type Index = Map Text (Int, Int)
+
+-- | Representation of an .idx file entry.
 type IndexEntry = (Text, (Int, Int))
 
+-- | Given .ifo file name and list of extensions, returns first existing file with the same basename.
 checkFiles :: IfoFilePath -> [FilePath] -> IO (Maybe FilePath)
 checkFiles _ [] = return Nothing
 checkFiles ifoPath (ext:exts) = let fn = ifoPath -<.> ext
@@ -174,6 +190,9 @@ checkFiles ifoPath (ext:exts) = let fn = ifoPath -<.> ext
     True  -> return . Just $ fn
     False -> checkFiles ifoPath exts
 
+-- | Given .ifo file name and two lists of extensions, returns first
+-- existing file with with the same basename and extension from the first
+-- list or (if such file doesn't exists) from the second list.
 checkGZFiles
   :: IfoFilePath
   -> [FilePath]
@@ -183,9 +202,10 @@ checkGZFiles ifoPath exts exts' = (checkFiles ifoPath exts) >>= maybe
   (fmap (Right <$>) (checkFiles ifoPath exts'))
   (return . Just . Left)
 
-
+-- | Type synonym to distinguish usage of paths.
 type IfoFilePath = FilePath
 
+-- | Read .idx (.idx.gz) file.
 readIndexFile :: (MonadThrow m, MonadIO m) => IfoFilePath -> Get Int -> m Index
 readIndexFile fn num = checkIndexFile fn >>= getIndexContents >>= mkIndex where
 

@@ -4,5 +4,6 @@ module NLP.Dictionary (
 
 import Data.Text.Lazy (Text)
 
+-- | Core type class that provides interface to dictionaries.
 class Dictionary a where
   getEntries :: Text -> a -> IO [Text]
