@@ -1,3 +1,11 @@
+{-|
+  Module:      NLP.Dictionary
+  Copyright:   (c) 2016 Al Zohali
+  License:     BSD3
+  Maintainer:  Al Zohali <zohl@fmap.me>
+  Stability:   experimental
+-}
+
 module NLP.Dictionary (
     Dictionary(..)
   ) where

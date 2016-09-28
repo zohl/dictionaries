@@ -4,4 +4,6 @@
 Tools to handle StarDict dictionaries.
 
 ## Status
-The library is under heavy development and the whole idea is still experimental.
+The library is under development and some features are still missing.
+Dictionaries that consist of `.ifo`, `.idx` (or `.idx.gz`), `.dict`
+(or `.dict.dz`) files should work.

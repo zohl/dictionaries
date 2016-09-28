@@ -1,3 +1,19 @@
+{-|
+  Module:      NLP.Dictionary.StarDict
+  Copyright:   (c) 2016 Al Zohali
+  License:     BSD3
+  Maintainer:  Al Zohali <zohl@fmap.me>
+  Stability:   experimental
+
+  = Description
+  Tools for StarDict dictionaries.
+  To load a dictionary you should call 'mkDictionary' with path to .ifo file
+  and render function.
+  Every call of getEntry will perform file reading operation to retrieve
+  requested data. For in-memory version see 'NLP.Dictionary.StarDict.InMemory'.
+-}
+
+
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -77,7 +93,7 @@ data StarDictException
 instance Exception StarDictException
 
 
--- | Representation of .ifo file
+-- | Representation of .ifo file.
 data IfoFile = IfoFile {
     ifoMagicData        :: ByteString
   , ifoVersion          :: String
@@ -235,6 +251,7 @@ readIndexFile fn num = checkIndexFile fn >>= getIndexContents >>= mkIndex where
   getIndexEntry = (,) <$> (decodeUtf8 <$> getLazyByteStringNul)
                       <*> ((,) <$> num <*> num)
 
+-- | Returns path of decompressed dictionary.
 checkDataFile :: (MonadThrow m, MonadIO m) => IfoFilePath -> m FilePath
 checkDataFile ifoPath = (liftIO $ checkGZFiles ifoPath ["dict1"] ["dict.dz"]) >>= \case
   Nothing         -> throwM $ DictionaryNotFound ifoPath
@@ -244,7 +261,7 @@ checkDataFile ifoPath = (liftIO $ checkGZFiles ifoPath ["dict1"] ["dict.dz"]) >>
     GZip.decompress <$> (BS.readFile fn) >>= BS.writeFile fn'
     return fn'
 
-
+-- | Possible dictionary entry formats.
 data DataEntry
   = UTF8Text Text
   | LocaleText Text
@@ -261,11 +278,13 @@ data DataEntry
   | Reserved ByteString
   deriving (Eq, Show)
 
+-- | Parser for a list of elements.
 getMany :: Get a -> Get [a]
 getMany p = isEmpty >>= \case
   True  -> return []
   False -> liftA2 (:) p (getMany p)
 
+-- | Returns parser based on description in .ifo file.
 mkDataParser :: Maybe String -> Get [DataEntry]
 mkDataParser = maybe (getMany getGenericEntry) getSpecificEntries where
 
@@ -296,8 +315,10 @@ mkDataParser = maybe (getMany getGenericEntry) getSpecificEntries where
     'X' -> Reserved  <$> getData
     _   -> error "type not supported"
 
+-- | Type of function to transform dictionary entries to a text.
 type Renderer = DataEntry -> Text
 
+-- | Representation of the dictionary.
 data StarDict = StarDict {
     sdIfoFile    :: IfoFile
   , sdIndex      :: Index
@@ -306,6 +327,7 @@ data StarDict = StarDict {
   , sdRender     :: Renderer
   }
 
+-- | Create dictionary.
 mkDictionary :: (MonadThrow m, MonadIO m) => IfoFilePath -> Renderer -> m StarDict
 mkDictionary ifoPath sdRender = do
   sdIfoFile    <- readIfoFile   ifoPath
@@ -324,3 +346,4 @@ instance Dictionary StarDict where
     extractEntry h (offset, size) = do
       hSeek h AbsoluteSeek (fromIntegral offset)
       T.concat . map sdRender . runGet sdDataParser <$> BS.hGet h size
+

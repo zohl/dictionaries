@@ -1,16 +1,15 @@
 { mkDerivation, attoparsec, base, binary, bytestring, containers
-, data-default, directory, exceptions, filepath, stdenv, text, zlib
+, data-default, directory, exceptions, filepath, stdenv, text, time
+, zlib
 }:
 mkDerivation {
   pname = "dictionaries";
   version = "0.1.0.0";
   src = ./.;
-  isLibrary = true;
-  isExecutable = true;
   libraryHaskellDepends = [
     attoparsec base binary bytestring containers data-default directory
-    exceptions filepath text zlib
+    exceptions filepath text time zlib
   ];
-  executableHaskellDepends = [ base ];
+  description = "Tools to handle StarDict dictionaries";
   license = stdenv.lib.licenses.bsd3;
 }

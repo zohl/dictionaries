@@ -1,3 +1,14 @@
+{-|
+  Module:      NLP.Dictionary.StarDict.InMemory
+  Copyright:   (c) 2016 Al Zohali
+  License:     BSD3
+  Maintainer:  Al Zohali <zohl@fmap.me>
+  Stability:   experimental
+
+  = Description
+  In-memory version of 'NLP.Dictionary.StarDict'.
+-}
+
 {-# LANGUAGE RecordWildCards #-}
 
 module NLP.Dictionary.StarDict.InMemory (
@@ -19,6 +30,7 @@ import NLP.Dictionary.StarDict (mkDataParser)
 import qualified Data.ByteString.Lazy as BS
 import qualified Data.Map.Strict as Map
 
+-- | Representation of dictionary.
 data StarDict = StarDict {
     sdIfoFile    :: IfoFile
   , sdIndex      :: Index
@@ -27,6 +39,7 @@ data StarDict = StarDict {
   , sdRender     :: Renderer
   }
 
+-- | Create dictionary.
 mkDictionary :: (MonadThrow m, MonadIO m) => IfoFilePath -> Renderer -> m StarDict
 mkDictionary ifoPath sdRender = do
   sdIfoFile  <- readIfoFile   ifoPath
