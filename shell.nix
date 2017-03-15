@@ -2,6 +2,7 @@
 
 let
   inherit (nixpkgs) pkgs;
+  dontCheck = pkgs.haskell.lib.dontCheck;
 
   haskellPackages = if compiler == "default"
                        then pkgs.haskellPackages
