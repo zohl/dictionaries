@@ -3,6 +3,7 @@
 ## [Unreleased]
 ### Added
 - `renderIfoFile` function.
+- `renderIndexFile` function.
 
 ## [0.1.0.1] - 2017-03-14
 ### Changed

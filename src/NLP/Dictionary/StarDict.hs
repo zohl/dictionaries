@@ -35,12 +35,14 @@ module NLP.Dictionary.StarDict (
   , IfoFilePath
   , readIfoFile
   , renderIfoFile
-  , indexNumberParser
+  , getIndexNumber
+  , putIndexNumber
   , ifoDateFormat
 
   , Index
   , IndexEntry
   , readIndexFile
+  , renderIndexFile
 
   , checkDataFile
   ) where
@@ -56,6 +58,8 @@ import Data.Attoparsec.ByteString.Char8 (isEndOfLine, endOfLine, skipSpace, char
 import Data.Binary.Get (Get, runGet, runGetOrFail, isEmpty)
 import Data.Binary.Get (getRemainingLazyByteString, getLazyByteStringNul, getLazyByteString)
 import Data.Binary.Get (getWord32be, getWord64be)
+import Data.Binary.Builder (Builder, fromLazyByteString, empty, toLazyByteString)
+import Data.Binary.Builder (putWord64be, putWord32be)
 import Data.ByteString.Lazy (ByteString)
 import Data.Char (chr)
 import Data.List (intercalate)
@@ -66,7 +70,7 @@ import Data.Typeable (Typeable)
 import Data.Time (parseTimeM, defaultTimeLocale, formatTime)
 import Data.Time.Clock (UTCTime)
 import Data.Text.Lazy (Text)
-import Data.Text.Lazy.Encoding (decodeUtf8, decodeLatin1)
+import Data.Text.Lazy.Encoding (decodeUtf8, encodeUtf8, decodeLatin1)
 import System.Directory (doesFileExist, getTemporaryDirectory)
 import System.FilePath.Posix (dropExtension, joinPath, takeBaseName, (-<.>), (<.>))
 import System.IO (Handle, IOMode(..), SeekMode(..), withFile, hSeek)
@@ -210,10 +214,16 @@ renderIfoFile IfoFile {..} = T.intercalate "\n" $ [
   ]
 
 -- | Get 32-bit or 64-bit integer depending on description in the .ifo file.
-indexNumberParser :: IfoFile -> Get Int
-indexNumberParser IfoFile {..} = case ifoIdxOffsetBits of
+getIndexNumber :: Maybe Int -> Get Int
+getIndexNumber = \case
   (Just 64) -> fromIntegral <$> getWord64be
   _         -> fromIntegral <$> getWord32be
+
+-- | Put 32-bit or 64-bit integer depending on description in the .ifo file.
+putIndexNumber :: Maybe Int -> (Int -> Builder)
+putIndexNumber = \case
+  (Just 64) -> putWord64be . fromIntegral
+  _         -> putWord32be . fromIntegral
 
 -- | Representation of an .idx file.
 type Index = Map Text (Int, Int)
@@ -273,6 +283,19 @@ readIndexFile fn num = checkIndexFile fn >>= getIndexContents >>= mkIndex where
   getIndexEntry :: Get IndexEntry
   getIndexEntry = (,) <$> (decodeUtf8 <$> getLazyByteStringNul)
                       <*> ((,) <$> num <*> num)
+
+-- Generates .idx file contents based on 'Index'.
+renderIndexFile :: Index -> (Int -> Builder) -> ByteString
+renderIndexFile index putNum = toLazyByteString $ buildIndex (Map.toList index) where
+
+  buildIndex [] = empty
+  buildIndex (e:es) = putEntry e <> buildIndex es
+
+  putEntry (entry, (offset, size)) = foldl1 (<>) [
+      (fromLazyByteString . encodeUtf8 $ entry)
+    , putNum offset
+    , putNum size
+    ]
 
 -- | Returns path of decompressed dictionary.
 checkDataFile :: (MonadThrow m, MonadIO m) => IfoFilePath -> m FilePath
@@ -354,7 +377,7 @@ data StarDict = StarDict {
 mkDictionary :: (MonadThrow m, MonadIO m) => IfoFilePath -> Renderer -> m StarDict
 mkDictionary ifoPath sdRender = do
   sdIfoFile    <- readIfoFile   ifoPath
-  sdIndex      <- readIndexFile ifoPath (indexNumberParser sdIfoFile)
+  sdIndex      <- readIndexFile ifoPath (getIndexNumber . ifoIdxOffsetBits $ sdIfoFile)
   sdDataPath   <- checkDataFile ifoPath
   let sdDataParser = mkDataParser (ifoSameTypeSequence sdIfoFile)
   return StarDict {..}

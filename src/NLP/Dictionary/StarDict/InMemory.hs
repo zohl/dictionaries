@@ -24,7 +24,7 @@ import Data.Maybe (maybeToList)
 import Data.Text.Lazy (Text)
 import Data.Text.Lazy.Encoding (decodeUtf8)
 import NLP.Dictionary (Dictionary(..))
-import NLP.Dictionary.StarDict (IfoFile(..), IfoFilePath, readIfoFile, indexNumberParser)
+import NLP.Dictionary.StarDict (IfoFile(..), IfoFilePath, readIfoFile, getIndexNumber)
 import NLP.Dictionary.StarDict (Index, readIndexFile, checkDataFile, DataEntry(..), Renderer)
 import NLP.Dictionary.StarDict (mkDataParser)
 import qualified Data.ByteString.Lazy as BS
@@ -43,7 +43,7 @@ data StarDict = StarDict {
 mkDictionary :: (MonadThrow m, MonadIO m) => IfoFilePath -> Renderer -> m StarDict
 mkDictionary ifoPath sdRender = do
   sdIfoFile  <- readIfoFile   ifoPath
-  sdIndex    <- readIndexFile ifoPath (indexNumberParser sdIfoFile)
+  sdIndex    <- readIndexFile ifoPath (getIndexNumber . ifoIdxOffsetBits $ sdIfoFile)
   sdData     <- checkDataFile ifoPath >>= liftIO . BS.readFile
   let sdDataParser = mkDataParser (ifoSameTypeSequence sdIfoFile)
   return StarDict {..}
