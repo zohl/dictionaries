@@ -34,6 +34,7 @@ module NLP.Dictionary.StarDict (
   , IfoFile(..)
   , IfoFilePath
   , readIfoFile
+  , renderIfoFile
   , indexNumberParser
   , ifoDateFormat
 
@@ -59,9 +60,10 @@ import Data.ByteString.Lazy (ByteString)
 import Data.Char (chr)
 import Data.List (intercalate)
 import Data.Map.Strict (Map)
-import Data.Maybe (maybeToList)
+import Data.Maybe (maybeToList, catMaybes)
+import Data.Monoid ((<>))
 import Data.Typeable (Typeable)
-import Data.Time (parseTimeM, defaultTimeLocale)
+import Data.Time (parseTimeM, defaultTimeLocale, formatTime)
 import Data.Time.Clock (UTCTime)
 import Data.Text.Lazy (Text)
 import Data.Text.Lazy.Encoding (decodeUtf8, decodeLatin1)
@@ -95,19 +97,19 @@ instance Exception StarDictException
 
 -- | Representation of .ifo file.
 data IfoFile = IfoFile {
-    ifoMagicData        :: ByteString
-  , ifoVersion          :: String
-  , ifoBookName         :: Text
-  , ifoWordCount        :: Int
-  , ifoIdxFileSize      :: Int
-  , ifoIdxOffsetBits    :: Maybe Int
-  , ifoSynWordCount     :: Maybe Int
-  , ifoAuthor           :: Maybe Text
-  , ifoEmail            :: Maybe Text
-  , ifoWebsite          :: Maybe Text
-  , ifoDescription      :: Maybe Text
-  , ifoDate             :: Maybe UTCTime
-  , ifoSameTypeSequence :: Maybe String
+    ifoMagicData        :: ByteString     -- ^ Corresponds to the first string in the file.
+  , ifoVersion          :: String         -- ^ Corresponds to version field.
+  , ifoBookName         :: Text           -- ^ Corresponds to bookname field.
+  , ifoWordCount        :: Int            -- ^ Corresponds to wordcount field.
+  , ifoIdxFileSize      :: Int            -- ^ Corresponds to idxfilesize field.
+  , ifoIdxOffsetBits    :: Maybe Int      -- ^ Corresponds to idxoffsetbits field.
+  , ifoSynWordCount     :: Maybe Int      -- ^ Corresponds to synwordcount field.
+  , ifoAuthor           :: Maybe Text     -- ^ Corresponds to author field.
+  , ifoEmail            :: Maybe Text     -- ^ Corresponds to email field.
+  , ifoWebsite          :: Maybe Text     -- ^ Corresponds to website field.
+  , ifoDescription      :: Maybe Text     -- ^ Corresponds to description field.
+  , ifoDate             :: Maybe UTCTime  -- ^ Corresponds to date field.
+  , ifoSameTypeSequence :: Maybe String   -- ^ Corresponds to sametypesequence field.
   , ifoDictType         :: Maybe String
   } deriving (Eq, Show)
 
@@ -185,6 +187,27 @@ readIfoFile ifoPath = (liftIO . BS.readFile $ ifoPath) >>= parseContents where
       _ <- skipSpace *> char '='
       v <- BS.fromStrict <$> (skipSpace *> takeWhile (not . isEndOfLine))
       return (k, v)
+
+-- | Generates .ifo file contents based on 'IfoFile'
+renderIfoFile :: IfoFile -> Text
+renderIfoFile IfoFile {..} = T.intercalate "\n" $ [
+      decodeUtf8 ifoMagicData
+    , "version="     <> (T.pack ifoVersion)
+    , "bookname="    <> ifoBookName
+    , "wordcount="   <> (T.pack . show $ ifoWordCount)
+    , "idxfilesize=" <> (T.pack . show $ ifoIdxFileSize)
+  ] ++ catMaybes [
+      (("idxoffsetbits="    <>) . T.pack . show)    <$> ifoIdxOffsetBits
+    , (("synwordcount="     <>) . T.pack . show)    <$> ifoSynWordCount
+    , ("author="            <>)                     <$> ifoAuthor
+    , ("email="             <>)                     <$> ifoEmail
+    , ("website="           <>)                     <$> ifoWebsite
+    , ("description="       <>)                     <$> ifoDescription
+    , (("date="             <>) . T.pack
+      . formatTime defaultTimeLocale ifoDateFormat) <$> ifoDate
+    , (("sametypesequence=" <>) . T.pack)           <$> ifoSameTypeSequence
+    , (("dicttype="         <>) . T.pack)           <$> ifoDictType
+  ]
 
 -- | Get 32-bit or 64-bit integer depending on description in the .ifo file.
 indexNumberParser :: IfoFile -> Get Int
