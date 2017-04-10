@@ -4,6 +4,7 @@
 ### Added
 - `renderIfoFile` function.
 - `renderIndexFile` function.
+- tests.
 
 ## [0.1.0.1] - 2017-03-14
 ### Changed

@@ -59,7 +59,7 @@ import Data.Binary.Get (Get, runGet, runGetOrFail, isEmpty)
 import Data.Binary.Get (getRemainingLazyByteString, getLazyByteStringNul, getLazyByteString)
 import Data.Binary.Get (getWord32be, getWord64be)
 import Data.Binary.Builder (Builder, fromLazyByteString, empty, toLazyByteString)
-import Data.Binary.Builder (putWord64be, putWord32be)
+import Data.Binary.Builder (putWord64be, putWord32be, singleton)
 import Data.ByteString.Lazy (ByteString)
 import Data.Char (chr)
 import Data.List (intercalate)
@@ -293,13 +293,14 @@ renderIndexFile index putNum = toLazyByteString $ buildIndex (Map.toList index) 
 
   putEntry (entry, (offset, size)) = foldl1 (<>) [
       (fromLazyByteString . encodeUtf8 $ entry)
+    , singleton 0
     , putNum offset
     , putNum size
     ]
 
 -- | Returns path of decompressed dictionary.
 checkDataFile :: (MonadThrow m, MonadIO m) => IfoFilePath -> m FilePath
-checkDataFile ifoPath = (liftIO $ checkGZFiles ifoPath ["dict1"] ["dict.dz"]) >>= \case
+checkDataFile ifoPath = (liftIO $ checkGZFiles ifoPath ["dict"] ["dict.dz"]) >>= \case
   Nothing         -> throwM $ DictionaryNotFound ifoPath
   Just (Left fn)  -> return fn
   Just (Right fn) -> liftIO $ do
@@ -392,4 +393,3 @@ instance Dictionary StarDict where
     extractEntry h (offset, size) = do
       hSeek h AbsoluteSeek (fromIntegral offset)
       T.concat . map sdRender . runGet sdDataParser <$> BS.hGet h size
-

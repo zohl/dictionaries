@@ -58,3 +58,4 @@ instance Dictionary StarDict where
     extractEntry (offset, size) = decodeUtf8
                                 . BS.take (fromIntegral size)
                                 . BS.drop (fromIntegral offset) $ sdData
+
