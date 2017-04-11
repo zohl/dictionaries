@@ -3,21 +3,22 @@
 module Utils (
     generateDictionary
   , generateStarDict
+  , renderId
   ) where
 
 import Control.Arrow (second)
+import Data.Monoid ((<>))
+import Data.Text.Lazy.Builder as BT
+import Data.Traversable (mapAccumL)
 import NLP.Dictionary.StarDict
 import System.Directory (getTemporaryDirectory, createDirectoryIfMissing)
 import System.FilePath ((</>), (<.>))
 import System.Random (getStdRandom, Random(..))
+import qualified Data.ByteString.Lazy as BS
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import qualified Data.Text.Lazy as T
 import qualified Data.Text.Lazy.IO as T
-import qualified Data.ByteString.Lazy as BS
-import Data.Traversable (mapAccumL)
-import Data.Text.Lazy.Builder as BT
-import Data.Monoid ((<>))
 
 
 randomString :: Int -> IO String
@@ -95,3 +96,8 @@ generateStarDict dictionary = do
   T.writeFile ifoPath ((renderIfoFile ifoFile) <> "\n")
 
   return ifoPath
+
+
+renderId :: Renderer
+renderId (UTF8Text s) = s
+renderId _ = error "not implemented"

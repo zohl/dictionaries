@@ -10,23 +10,24 @@
 -}
 
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 module NLP.Dictionary.StarDict.InMemory (
     StarDict (..)
   , mkDictionary
   ) where
 
+import Control.DeepSeq (NFData)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Catch (MonadThrow)
-import Data.Binary.Get (Get, getWord32be)
 import Data.ByteString.Lazy (ByteString)
 import Data.Maybe (maybeToList)
 import Data.Text.Lazy (Text)
 import Data.Text.Lazy.Encoding (decodeUtf8)
+import GHC.Generics (Generic)
 import NLP.Dictionary (Dictionary(..))
 import NLP.Dictionary.StarDict (IfoFile(..), IfoFilePath, readIfoFile, getIndexNumber)
-import NLP.Dictionary.StarDict (Index, readIndexFile, checkDataFile, DataEntry(..), Renderer)
-import NLP.Dictionary.StarDict (mkDataParser)
+import NLP.Dictionary.StarDict (Index, readIndexFile, checkDataFile, Renderer)
 import qualified Data.ByteString.Lazy as BS
 import qualified Data.Map.Strict as Map
 
@@ -35,9 +36,11 @@ data StarDict = StarDict {
     sdIfoFile    :: IfoFile
   , sdIndex      :: Index
   , sdData       :: ByteString
-  , sdDataParser :: Get [DataEntry]
   , sdRender     :: Renderer
-  }
+  } deriving Generic
+
+instance NFData StarDict
+
 
 -- | Create dictionary.
 mkDictionary :: (MonadThrow m, MonadIO m) => IfoFilePath -> Renderer -> m StarDict
@@ -45,7 +48,6 @@ mkDictionary ifoPath sdRender = do
   sdIfoFile  <- readIfoFile   ifoPath
   sdIndex    <- readIndexFile ifoPath (getIndexNumber . ifoIdxOffsetBits $ sdIfoFile)
   sdData     <- checkDataFile ifoPath >>= liftIO . BS.readFile
-  let sdDataParser = mkDataParser (ifoSameTypeSequence sdIfoFile)
   return StarDict {..}
 
 instance Dictionary StarDict where
@@ -58,4 +60,3 @@ instance Dictionary StarDict where
     extractEntry (offset, size) = decodeUtf8
                                 . BS.take (fromIntegral size)
                                 . BS.drop (fromIntegral offset) $ sdData
-

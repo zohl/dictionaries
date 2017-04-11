@@ -5,6 +5,7 @@
 - `renderIfoFile` function.
 - `renderIndexFile` function.
 - tests.
+- instances of `NFData` for dictionaries.
 
 ## [0.1.0.1] - 2017-03-14
 ### Changed

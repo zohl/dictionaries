@@ -18,6 +18,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 module NLP.Dictionary.StarDict (
     StarDict (..)
@@ -50,7 +51,7 @@ module NLP.Dictionary.StarDict (
 import Prelude hiding (takeWhile)
 import Control.Applicative (liftA2, many)
 import Control.Arrow ((***))
-import Control.Monad (when, unless)
+import Control.Monad (unless)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Catch (Exception, MonadThrow, throwM)
 import Data.Attoparsec.ByteString.Lazy (Result(..), Parser, parse, string, takeWhile, inClass)
@@ -61,7 +62,6 @@ import Data.Binary.Get (getWord32be, getWord64be)
 import Data.Binary.Builder (Builder, fromLazyByteString, empty, toLazyByteString)
 import Data.Binary.Builder (putWord64be, putWord32be, singleton)
 import Data.ByteString.Lazy (ByteString)
-import Data.Char (chr)
 import Data.List (intercalate)
 import Data.Map.Strict (Map)
 import Data.Maybe (maybeToList, catMaybes)
@@ -72,7 +72,7 @@ import Data.Time.Clock (UTCTime)
 import Data.Text.Lazy (Text)
 import Data.Text.Lazy.Encoding (decodeUtf8, encodeUtf8, decodeLatin1)
 import System.Directory (doesFileExist, getTemporaryDirectory)
-import System.FilePath.Posix (dropExtension, joinPath, takeBaseName, (-<.>), (<.>))
+import System.FilePath.Posix (joinPath, takeBaseName, (-<.>), (<.>))
 import System.IO (Handle, IOMode(..), SeekMode(..), withFile, hSeek)
 import NLP.Dictionary (Dictionary(..))
 import qualified Codec.Compression.GZip as GZip
@@ -80,6 +80,8 @@ import qualified Data.ByteString.Lazy as BS
 import qualified Data.ByteString.Lazy.Char8 as BSC8
 import qualified Data.Map.Strict as Map
 import qualified Data.Text.Lazy as T
+import Control.DeepSeq (NFData(..))
+import GHC.Generics (Generic)
 
 -- | Exceptions that are thrown when something with this module went wrong.
 data StarDictException
@@ -115,7 +117,9 @@ data IfoFile = IfoFile {
   , ifoDate             :: Maybe UTCTime  -- ^ Corresponds to date field.
   , ifoSameTypeSequence :: Maybe String   -- ^ Corresponds to sametypesequence field.
   , ifoDictType         :: Maybe String
-  } deriving (Eq, Show)
+  } deriving (Eq, Show, Generic)
+
+instance NFData IfoFile
 
 -- | Date format of 'ifoDate' in IfoFile.
 ifoDateFormat :: String
@@ -265,13 +269,13 @@ readIndexFile fn num = checkIndexFile fn >>= getIndexContents >>= mkIndex where
 
   getIndexContents :: (MonadThrow m, MonadIO m)
     => Either FilePath FilePath -> m (FilePath, ByteString)
-  getIndexContents path = liftIO . fmap (fn,) . postprocess . BS.readFile $ fn where
+  getIndexContents path = liftIO . fmap (fn',) . postprocess . BS.readFile $ fn' where
     postprocess = either (const id) (const $ fmap GZip.decompress) path
-    fn = either id id path
+    fn' = either id id path
 
   mkIndex :: (MonadThrow m, MonadIO m) => (FilePath, ByteString) -> m Index
-  mkIndex (fn, contents) = either
-    (\(_, _, err) -> throwM $ WrongIndexFormat fn err)
+  mkIndex (fn', contents) = either
+    (\(_, _, err) -> throwM $ WrongIndexFormat fn' err)
     (\(_, _, res) -> return . Map.fromList $ res)
     (runGetOrFail getIndexEntries contents)
 
@@ -370,9 +374,10 @@ data StarDict = StarDict {
     sdIfoFile    :: IfoFile
   , sdIndex      :: Index
   , sdDataPath   :: FilePath
-  , sdDataParser :: Get [DataEntry]
   , sdRender     :: Renderer
-  }
+  } deriving Generic
+
+instance NFData StarDict
 
 -- | Create dictionary.
 mkDictionary :: (MonadThrow m, MonadIO m) => IfoFilePath -> Renderer -> m StarDict
@@ -380,7 +385,6 @@ mkDictionary ifoPath sdRender = do
   sdIfoFile    <- readIfoFile   ifoPath
   sdIndex      <- readIndexFile ifoPath (getIndexNumber . ifoIdxOffsetBits $ sdIfoFile)
   sdDataPath   <- checkDataFile ifoPath
-  let sdDataParser = mkDataParser (ifoSameTypeSequence sdIfoFile)
   return StarDict {..}
 
 instance Dictionary StarDict where
@@ -392,4 +396,4 @@ instance Dictionary StarDict where
     extractEntry :: Handle -> (Int, Int) -> IO Text
     extractEntry h (offset, size) = do
       hSeek h AbsoluteSeek (fromIntegral offset)
-      T.concat . map sdRender . runGet sdDataParser <$> BS.hGet h size
+      T.concat . map sdRender . runGet (mkDataParser . ifoSameTypeSequence $ sdIfoFile) <$> BS.hGet h size

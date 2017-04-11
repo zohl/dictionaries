@@ -1,14 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 import NLP.Dictionary (getEntries)
-import NLP.Dictionary.StarDict (Renderer, DataEntry(..), mkDictionary)
-import Utils (generateDictionary, generateStarDict)
+import NLP.Dictionary.StarDict (mkDictionary)
 import Test.Hspec (Spec, hspec, describe, it, context, shouldBe)
-
-
-renderId :: Renderer
-renderId (UTF8Text s) = s
-renderId _ = error "not implemented"
+import Utils (generateDictionary, generateStarDict, renderId)
 
 
 main :: IO ()
