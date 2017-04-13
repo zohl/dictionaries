@@ -30,23 +30,19 @@ randomWord :: (Int, Int) -> IO T.Text
 randomWord wordSize = (getStdRandom $ randomR wordSize) >>= (fmap T.pack . randomString)
 
 randomText :: (Int, Int) -> (Int, Int) -> IO T.Text
-randomText wordSize textSize =
+randomText textSize wordSize =
   fmap (("<<" <>) . (<> ">>"))
   $ (getStdRandom $ randomR textSize)
   >>= fmap (T.intercalate " ") . sequence . flip replicate (randomWord wordSize)
 
 
-generateDictionary :: IO [(T.Text, T.Text)]
-generateDictionary = do
-  let wordSize = (4, 8) :: (Int, Int)
-  let textSize = (4, 8) :: (Int, Int)
-
-  numWords <- getStdRandom $ randomR (3, 40) :: IO Int
+generateDictionary :: Int -> (Int, Int) -> (Int, Int) -> IO [(T.Text, T.Text)]
+generateDictionary dictionarySize textSize wordSize = do
 
   ws <- fmap (Set.toList . Set.fromList) $
-          sequence $ replicate numWords (randomWord wordSize)
+          sequence $ replicate dictionarySize (randomWord wordSize)
 
-  zip ws <$> (sequence $ replicate (length ws) (randomText wordSize textSize))
+  zip ws <$> (sequence $ replicate (length ws) (randomText textSize wordSize))
 
 
 generateIndex :: [(T.Text, T.Text)] -> Index

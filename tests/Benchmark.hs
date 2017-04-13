@@ -27,31 +27,64 @@ instance NFData DictionaryWrapper where
   rnf (WrapDictionary !_) = ()
 
 
-mkName :: Bool -> Int -> Int -> String
-mkName inMemory wordsNum wordsSize = intercalate "_" $ [
-    if inMemory then "InMemory" else "Regular"
-  , show wordsNum
-  , show wordsSize
+data DictionaryType
+  = Regular
+  | InMemory
+  deriving (Eq, Show, Enum, Bounded)
+
+mkDictionary :: (MonadIO m, MonadThrow m)
+  => DictionaryType
+  -> SD.IfoFilePath
+  -> m DictionaryWrapper
+mkDictionary Regular = \p -> wrapDictionary <$> SD.mkDictionary p renderId
+mkDictionary InMemory = \p -> wrapDictionary <$> SDIM.mkDictionary p renderId
+
+
+
+around :: Int -> (Int, Int)
+around x = (x - 2, x + 2)
+
+mkName :: Int -> Int -> Int -> String
+mkName dictionarySize textSize wordSize = intercalate "_" $ [
+    show dictionarySize
+  , show textSize
+  , show wordSize
   ]
 
-mkDictionary :: (MonadIO m, MonadThrow m) => Bool -> SD.IfoFilePath -> m DictionaryWrapper
-mkDictionary inMemory = if inMemory
-  then \path -> wrapDictionary <$> SDIM.mkDictionary path renderId
-  else \path -> wrapDictionary <$> SD.mkDictionary path renderId
 
-  
-benchLoading :: Bool -> Int -> Int -> Benchmark
-benchLoading inMemory wordsNum wordsSize = env
-  (generateDictionary >>= generateStarDict) -- TODO add parameters
-  $ \starDictPath -> bench (mkName inMemory wordsNum wordsSize) $ do
-    nfIO $ (mkDictionary inMemory starDictPath)
+benchLoading :: Int -> Int -> Int -> DictionaryType -> Benchmark
+benchLoading dictionarySize textSize wordSize dictionaryType = env
+  (generateDictionary
+    dictionarySize
+    (around textSize)
+    (around wordSize)
+    >>= generateStarDict)
+  $ \starDictPath -> bench (mkName dictionarySize textSize wordSize) $ do
+    nfIO $ (mkDictionary dictionaryType starDictPath)
+
+benchAccessing :: Int -> Int -> Int -> DictionaryType -> Benchmark
+benchAccessing _ _ _ _ = bench "TODO" . nfIO $ return ()  -- TODO
+
+
+benchDictionaries :: ([DictionaryType -> Benchmark]) -> [Benchmark]
+benchDictionaries bs = map
+  (\dt -> bgroup (show dt) (map ($ dt) bs))
+  [minBound..maxBound]
+
 
 
 main :: IO ()
 main = defaultMain [
-    bgroup "Loading" [
-      benchLoading False 0 0 
-    , benchLoading True  0 0 
-    ]
-  , bgroup "Accessing" [] -- TODO add benchmarks
+    bgroup "Loading" . benchDictionaries $ [
+        benchLoading 100  100  100
+      , benchLoading 500  100  100
+      , benchLoading 100  500  100
+      , benchLoading 100  100  500
+      ]
+  , bgroup "Accessing" . benchDictionaries $ [
+        benchAccessing 100  100  100
+      , benchAccessing 500  100  100
+      , benchAccessing 100  500  100
+      , benchAccessing 100  100  500
+      ]
   ]

@@ -18,7 +18,7 @@ randomDictionary :: Spec
 randomDictionary = do
 
   let generateDictionaries = do
-        dictionary <- generateDictionary
+        dictionary <- generateDictionary 10 (5, 15) (1, 10)
         starDictPath <- generateStarDict dictionary
         starDict <- mkDictionary starDictPath renderId
         return (dictionary, starDict)
