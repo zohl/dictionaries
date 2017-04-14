@@ -1,6 +1,7 @@
 { mkDerivation, attoparsec, base, binary, bytestring, containers
 , criterion, data-default, deepseq, directory, exceptions, filepath
-, hspec, QuickCheck, random, stdenv, text, time, transformers, zlib
+, hspec, QuickCheck, random, random-shuffle, stdenv, text, time
+, transformers, zlib
 }:
 mkDerivation {
   pname = "dictionaries";
@@ -13,8 +14,8 @@ mkDerivation {
     directory exceptions filepath text time transformers zlib
   ];
   executableHaskellDepends = [
-    base bytestring containers criterion deepseq directory filepath
-    random text
+    base bytestring containers criterion deepseq directory exceptions
+    filepath random random-shuffle text
   ];
   testHaskellDepends = [
     base bytestring containers directory filepath hspec QuickCheck

@@ -10,6 +10,8 @@ import Criterion.Main (bgroup, defaultMain)
 import Data.List (intercalate)
 import NLP.Dictionary
 import NLP.Dictionary.StarDict ()
+import System.Random (getStdGen)
+import System.Random.Shuffle (shuffle')
 import Utils (generateDictionary, generateStarDict, renderId)
 import qualified NLP.Dictionary.StarDict as SD
 import qualified NLP.Dictionary.StarDict.InMemory as SDIM
@@ -40,9 +42,8 @@ mkDictionary Regular = \p -> wrapDictionary <$> SD.mkDictionary p renderId
 mkDictionary InMemory = \p -> wrapDictionary <$> SDIM.mkDictionary p renderId
 
 
-
 around :: Int -> (Int, Int)
-around x = (x - 2, x + 2)
+around x = let dx = min (x `div` 10) 1 in (x - dx, x + dx)
 
 mkName :: Int -> Int -> Int -> String
 mkName dictionarySize textSize wordSize = intercalate "_" $ [
@@ -62,15 +63,31 @@ benchLoading dictionarySize textSize wordSize dictionaryType = env
   $ \starDictPath -> bench (mkName dictionarySize textSize wordSize) $ do
     nfIO $ (mkDictionary dictionaryType starDictPath)
 
+
 benchAccessing :: Int -> Int -> Int -> DictionaryType -> Benchmark
-benchAccessing _ _ _ _ = bench "TODO" . nfIO $ return ()  -- TODO
+benchAccessing dictionarySize textSize wordSize dictionaryType = env
+  (do
+    dict <- generateDictionary
+              dictionarySize
+              (around textSize)
+              (around wordSize)
+
+    sampleWords <- fmap (take 10)
+                 . fmap (shuffle' (map fst dict) (length dict))
+                 $ getStdGen
+
+    starDict <- generateStarDict dict >>= mkDictionary dictionaryType
+
+    return (starDict, sampleWords))
+
+  $ \ ~(starDict, sampleWords) -> bench (mkName dictionarySize textSize wordSize) $ do
+    nfIO $ mapM (flip getEntries starDict) sampleWords
 
 
 benchDictionaries :: ([DictionaryType -> Benchmark]) -> [Benchmark]
 benchDictionaries bs = map
   (\dt -> bgroup (show dt) (map ($ dt) bs))
   [minBound..maxBound]
-
 
 
 main :: IO ()
@@ -88,3 +105,4 @@ main = defaultMain [
       , benchAccessing 100  100  500
       ]
   ]
+
