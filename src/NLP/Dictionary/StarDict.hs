@@ -267,13 +267,13 @@ readIndexFile fn num = checkIndexFile fn >>= getIndexContents >>= mkIndex where
     Nothing   -> throwM $ IndexNotFound ifoPath
     Just path -> return path
 
-  getIndexContents :: (MonadThrow m, MonadIO m)
+  getIndexContents :: (MonadIO m)
     => Either FilePath FilePath -> m (FilePath, ByteString)
   getIndexContents path = liftIO . fmap (fn',) . postprocess . BS.readFile $ fn' where
     postprocess = either (const id) (const $ fmap GZip.decompress) path
     fn' = either id id path
 
-  mkIndex :: (MonadThrow m, MonadIO m) => (FilePath, ByteString) -> m Index
+  mkIndex :: (MonadThrow m) => (FilePath, ByteString) -> m Index
   mkIndex (fn', contents) = either
     (\(_, _, err) -> throwM $ WrongIndexFormat fn' err)
     (\(_, _, res) -> return . Map.fromList $ res)
