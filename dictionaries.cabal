@@ -94,6 +94,7 @@ executable bench
                , random
                , random-shuffle
                , text
+               , transformers
                , deepseq
 
   ghc-options: -Wall

@@ -288,7 +288,7 @@ readIndexFile fn num = checkIndexFile fn >>= getIndexContents >>= mkIndex where
   getIndexEntry = (,) <$> (decodeUtf8 <$> getLazyByteStringNul)
                       <*> ((,) <$> num <*> num)
 
--- Generates .idx file contents based on 'Index'.
+-- | Generates .idx file contents based on 'Index'.
 renderIndexFile :: Index -> (Int -> Builder) -> ByteString
 renderIndexFile index putNum = toLazyByteString $ buildIndex (Map.toList index) where
 
