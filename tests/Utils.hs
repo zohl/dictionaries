@@ -63,7 +63,8 @@ generateStarDict dictionary = do
 
   let dictionaryPath = basePath </> dictionaryName <.> "dict"
   let dictionaryContents = BT.toLazyText
-        . foldl1 (<>)
+        . foldr1 (<>)
+        . ((BT.fromLazyText ""):)
         . map (\(name, entry) -> BT.fromLazyText name <> BT.fromLazyText entry)
         $ dictionary
   T.writeFile dictionaryPath dictionaryContents

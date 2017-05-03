@@ -295,7 +295,7 @@ renderIndexFile index putNum = toLazyByteString $ buildIndex (Map.toList index) 
   buildIndex [] = empty
   buildIndex (e:es) = putEntry e <> buildIndex es
 
-  putEntry (entry, (offset, size)) = foldl1 (<>) [
+  putEntry (entry, (offset, size)) = foldr1 (<>) [
       (fromLazyByteString . encodeUtf8 $ entry)
     , singleton 0
     , putNum offset
