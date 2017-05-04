@@ -8,8 +8,9 @@ import Control.Monad.IO.Class (MonadIO)
 import Criterion (Benchmark, bench, nfIO, env)
 import Criterion.Main (bgroup, defaultMain)
 import Data.List (intercalate)
-import NLP.Dictionary
+import NLP.Dictionary (Dictionary(..))
 import NLP.Dictionary.StarDict ()
+import NLP.Dictionary.StarDict.Common (IfoFilePath)
 import System.Random (getStdGen)
 import System.Random.Shuffle (shuffle')
 import Utils (generateDictionary, generateStarDict, renderId)
@@ -36,7 +37,7 @@ data DictionaryType
 
 mkDictionary :: (MonadIO m, MonadThrow m)
   => DictionaryType
-  -> SD.IfoFilePath
+  -> IfoFilePath
   -> m DictionaryWrapper
 mkDictionary Regular = \p -> wrapDictionary <$> SD.mkDictionary p renderId
 mkDictionary InMemory = \p -> wrapDictionary <$> SDIM.mkDictionary p renderId

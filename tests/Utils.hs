@@ -10,12 +10,12 @@ import Control.Arrow (second)
 import Data.Monoid ((<>))
 import Data.Text.Lazy.Builder as BT
 import Data.Traversable (mapAccumL)
-import NLP.Dictionary.StarDict
+import NLP.Dictionary.StarDict.Common (IfoFile(..), IndexEntry, Renderer, DataEntry(..))
+import NLP.Dictionary.StarDict.Common (renderIfoFile, renderIndexFile, putIndexNumber)
 import System.Directory (getTemporaryDirectory, createDirectoryIfMissing)
 import System.FilePath ((</>), (<.>))
 import System.Random (getStdRandom, Random(..))
 import qualified Data.ByteString.Lazy as BS
-import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import qualified Data.Text.Lazy as T
 import qualified Data.Text.Lazy.IO as T
@@ -45,8 +45,8 @@ generateDictionary dictionarySize textSize wordSize = do
   zip ws <$> (sequence $ replicate (length ws) (randomText textSize wordSize))
 
 
-generateIndex :: [(T.Text, T.Text)] -> Index
-generateIndex = Map.fromList . snd
+generateIndex :: [(T.Text, T.Text)] -> [IndexEntry]
+generateIndex = snd
   . mapAccumL generateIndexEntry  0
   . map (second (fromIntegral . T.length)) where
 
