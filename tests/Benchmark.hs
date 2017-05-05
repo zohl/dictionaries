@@ -14,7 +14,7 @@ import NLP.Dictionary.StarDict.Common (IfoFilePath)
 import System.Random (getStdGen)
 import System.Random.Shuffle (shuffle')
 import Utils (generateDictionary, generateStarDict, renderId)
-import qualified NLP.Dictionary.StarDict as SD
+import qualified NLP.Dictionary.StarDict.Regular as SDR
 import qualified NLP.Dictionary.StarDict.InMemory as SDIM
 
 
@@ -39,7 +39,7 @@ mkDictionary :: (MonadIO m, MonadThrow m)
   => DictionaryType
   -> IfoFilePath
   -> m DictionaryWrapper
-mkDictionary Regular = \p -> wrapDictionary <$> SD.mkDictionary p renderId
+mkDictionary Regular = \p -> wrapDictionary <$> SDR.mkDictionary p renderId
 mkDictionary InMemory = \p -> wrapDictionary <$> SDIM.mkDictionary p renderId
 
 

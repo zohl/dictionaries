@@ -26,6 +26,7 @@ library
     NLP.Dictionary.StarDict
     NLP.Dictionary.StarDict.Common
     NLP.Dictionary.StarDict.InMemory
+    NLP.Dictionary.StarDict.Regular
 
   build-depends: base >= 4.8.2 && < 4.11
                , attoparsec >= 0.10.4.0 && < 0.14
