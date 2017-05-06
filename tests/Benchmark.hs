@@ -9,7 +9,7 @@ import Criterion (Benchmark, bench, nfIO, env)
 import Criterion.Main (bgroup, defaultMain)
 import Data.List (intercalate)
 import NLP.Dictionary (Dictionary(..))
-import NLP.Dictionary.StarDict ()
+import NLP.Dictionary.StarDict (StarDict(..))
 import NLP.Dictionary.StarDict.Common (IfoFilePath)
 import System.Random (getStdGen)
 import System.Random.Shuffle (shuffle')
@@ -35,12 +35,12 @@ data DictionaryType
   | InMemory
   deriving (Eq, Show, Enum, Bounded)
 
-mkDictionary :: (MonadIO m, MonadThrow m)
+mkWrappedDictionary :: (MonadIO m, MonadThrow m)
   => DictionaryType
   -> IfoFilePath
   -> m DictionaryWrapper
-mkDictionary Regular = \p -> wrapDictionary <$> SDR.mkDictionary p renderId
-mkDictionary InMemory = \p -> wrapDictionary <$> SDIM.mkDictionary p renderId
+mkWrappedDictionary Regular = \p -> wrapDictionary <$> mkDictionary (SDR.tag p) renderId
+mkWrappedDictionary InMemory = \p -> wrapDictionary <$> mkDictionary (SDIM.tag p) renderId
 
 
 around :: Int -> (Int, Int)
@@ -62,7 +62,7 @@ benchLoading dictionarySize textSize wordSize dictionaryType = env
     (around wordSize)
     >>= generateStarDict)
   $ \starDictPath -> bench (mkName dictionarySize textSize wordSize) $ do
-    nfIO $ (mkDictionary dictionaryType starDictPath)
+    nfIO $ (mkWrappedDictionary dictionaryType starDictPath)
 
 
 benchAccessing :: Int -> Int -> Int -> DictionaryType -> Benchmark
@@ -77,7 +77,7 @@ benchAccessing dictionarySize textSize wordSize dictionaryType = env
                  . fmap (shuffle' (map fst dict) (length dict))
                  $ getStdGen
 
-    starDict <- generateStarDict dict >>= mkDictionary dictionaryType
+    starDict <- generateStarDict dict >>= mkWrappedDictionary dictionaryType
 
     return (starDict, sampleWords))
 

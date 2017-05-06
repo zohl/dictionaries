@@ -39,6 +39,8 @@ module NLP.Dictionary.StarDict.Common (
   , DataEntry (..)
   , Renderer
   , mkDataParser
+
+  , StarDict (..)
   ) where
 
 import Prelude hiding (takeWhile)
@@ -58,11 +60,13 @@ import Data.ByteString.Lazy (ByteString)
 import Data.List (intercalate)
 import Data.Maybe (catMaybes)
 import Data.Monoid ((<>))
+import Data.Tagged (Tagged)
 import Data.Typeable (Typeable)
 import Data.Time (parseTimeM, defaultTimeLocale, formatTime)
 import Data.Time.Clock (UTCTime)
 import Data.Text.Lazy (Text)
 import Data.Text.Lazy.Encoding (decodeUtf8, encodeUtf8, decodeLatin1)
+import NLP.Dictionary (Dictionary)
 import System.Directory (doesFileExist, getTemporaryDirectory)
 import System.FilePath.Posix (joinPath, takeBaseName, (-<.>), (<.>))
 import qualified Codec.Compression.GZip as GZip
@@ -359,3 +363,8 @@ mkDataParser = maybe (getMany getGenericEntry) getSpecificEntries where
 
 -- | Type of function to transform dictionary entries to a text.
 type Renderer = DataEntry -> Text
+
+
+class (Dictionary d) => StarDict d where
+  getIfoFile   :: d -> IfoFile
+  mkDictionary :: (MonadThrow m, MonadIO m) => Tagged d IfoFilePath -> Renderer -> m d

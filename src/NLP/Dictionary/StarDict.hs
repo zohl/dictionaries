@@ -7,19 +7,25 @@
 
   = Description
   Tools for StarDict dictionaries.
-  This module exports 'NLP.Dictionary.StarDict.Regular' as default
-  implementation of a dictionary. It's recommended to user qualified
-  imports for dictionary implementations.
+  This module (re)exports core classes that are needed to work with
+  dictionaries. To create dictionary, use `mkDictionary` method
+  together with `tag` from one of implementations:
+
+  @
+    import NLP.Dictionary.StarDict (StarDict(..))
+    import qualified NLP.Dictionery.StarDict.Regular as SDR
+
+    ...
+
+      dictionary <- mkDictionary (SDR.tag "/path/to/a/dictionary.ifo") renderer
+  @
 -}
 
 
 module NLP.Dictionary.StarDict (
-    StarDict(..)
-  , mkDictionary
-
-  , DataEntry(..)
+    DataEntry(..)
   , Renderer
+  , StarDict(..)
   ) where
 
-import NLP.Dictionary.StarDict.Regular (StarDict(..), mkDictionary)
-import NLP.Dictionary.StarDict.Common (DataEntry(..), Renderer)
+import NLP.Dictionary.StarDict.Common (StarDict(..), DataEntry(..), Renderer)

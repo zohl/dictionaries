@@ -1,9 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 import NLP.Dictionary (getEntries)
-import NLP.Dictionary.StarDict (mkDictionary)
+import NLP.Dictionary.StarDict (StarDict(..))
 import Test.Hspec (Spec, hspec, describe, it, context, shouldBe)
 import Utils (generateDictionary, generateStarDict, renderId)
+import qualified NLP.Dictionary.StarDict.Regular as SDR
 
 
 main :: IO ()
@@ -13,14 +14,13 @@ spec :: Spec
 spec = do
   describe "RandomDictionary" randomDictionary
 
-
 randomDictionary :: Spec
 randomDictionary = do
 
   let generateDictionaries = do
         dictionary <- generateDictionary 10 (5, 15) (1, 10)
         starDictPath <- generateStarDict dictionary
-        starDict <- mkDictionary starDictPath renderId
+        starDict <- mkDictionary (SDR.tag starDictPath) renderId
         return (dictionary, starDict)
 
   context "when getting entries" $ do
