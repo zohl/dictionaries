@@ -365,6 +365,7 @@ mkDataParser = maybe (getMany getGenericEntry) getSpecificEntries where
 type Renderer = DataEntry -> Text
 
 
+-- | Classtype for stardict dictionaries.
 class (Dictionary d) => StarDict d where
   getIfoFile   :: d -> IfoFile
   mkDictionary :: (MonadThrow m, MonadIO m) => Tagged d IfoFilePath -> Renderer -> m d
