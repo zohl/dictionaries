@@ -2,6 +2,10 @@
 
 ## [HEAD]
 
+## [0.2.0.2] - 2017-05-26
+### Changed
+- Fixed dependencies' bounds.
+
 ## [0.2.0] - 2017-05-07
 ### Added
 - `renderIfoFile` function.
@@ -24,6 +28,7 @@
 - Initial version of the package.
 
 
-[HEAD]:    ../../compare/v0.2.0...HEAD
+[HEAD]:    ../../compare/v0.2.0.2...HEAD
+[0.2.0.2]: ../../compare/v0.2.0...v0.2.0.2
 [0.2.0]:   ../../compare/v0.1.0.1...v0.2.0
 [0.1.0.1]: ../../compare/v0.1.0.0...v0.1.0.1

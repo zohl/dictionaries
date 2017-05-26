@@ -1,5 +1,5 @@
 name:                dictionaries
-version:             0.2.0.1
+version:             0.2.0.2
 synopsis:            Tools to handle StarDict dictionaries.
 -- description:
 license:             BSD3
@@ -91,7 +91,7 @@ executable bench
 
   build-depends: base           >= 4.7     && < 5.0
                , bytestring
-               , criterion      >= 0.6.2.1 && < 1.2
+               , criterion      >= 0.6.2.1 && < 1.3
                , containers
                , dictionaries
                , directory

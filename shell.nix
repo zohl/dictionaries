@@ -8,7 +8,14 @@ let
                        then pkgs.haskellPackages
                        else pkgs.haskell.packages.${compiler};
 
-  haskellPackages_ = haskellPackages.override {};
+  haskellPackages_ = haskellPackages.override {
+    overrides = self: super: {
+      criterion = dontCheck (self.callPackage ./deps/criterion-1.2.nix {});
+      microstache = dontCheck (self.callPackage ./deps/microstache-1.nix {});
+      statistics = dontCheck (self.callPackage ./deps/statistics-0.14.0.2.nix {});
+      base-orphans = dontCheck (self.callPackage ./deps/base-orphans-0.6.nix {});
+    };
+  };
 
   drv = haskellPackages_.callPackage ./default.nix {};
 
