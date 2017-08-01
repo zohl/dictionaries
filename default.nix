@@ -5,7 +5,7 @@
 }:
 mkDerivation {
   pname = "dictionaries";
-  version = "0.2.0.2";
+  version = "0.2.0.3";
   src = ./.;
   isLibrary = true;
   isExecutable = true;

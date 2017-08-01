@@ -1,5 +1,5 @@
 name:                dictionaries
-version:             0.2.0.2
+version:             0.2.0.3
 synopsis:            Tools to handle StarDict dictionaries.
 -- description:
 license:             BSD3
@@ -65,7 +65,7 @@ test-suite tests
                , bytestring
                , hspec          >= 2.0  && < 3.0
                , tagged
-               , time           >= 1.5  && < 1.8
+               , time           >= 1.5  && < 1.9
                , containers
                , dictionaries
                , directory
